@@ -1,0 +1,516 @@
+String user = "RPC_USER_NAME";
+String password = "RPC_PASSWORD";
+String host = "127.0.0.1";
+String port = "PORT";
+
+try {
+    URL url = new URL("http://" + user + ':' + password + "@" + host + ":" + port + "/");
+
+    BitcoinJSONRPCClient bitcoinClient = new BitcoinJSONRPCClient(url);
+    System.out.println(bitcoinClient.getInfo());
+} catch (MalformedURLException e) {
+    e.printStackTrace();
+}
+
+JSON-RPC
+Running Bitcoin with the -server argument (or running bitcoind) tells it to function as a HTTP JSON-RPC server, but Basic access authentication must be used when communicating with it, and, for security, by default, the server only accepts connections from other processes on the same machine. If your HTTP or JSON library requires you to specify which 'realm' is authenticated, use 'jsonrpc'.
+
+Bitcoin supports SSL (https) JSON-RPC connections beginning with version 0.3.14. See the rpcssl wiki page for setup instructions and a list of all bitcoin.conf configuration options.
+
+Allowing arbitrary machines to access the JSON-RPC port (using the rpcallowip configuration option) is dangerous and strongly discouraged-- access should be strictly limited to trusted machines.
+
+To access the server you should find a suitable library for your language.
+
+Proper money handling
+See the proper money handling page for notes on avoiding rounding errors when handling bitcoin values.
+
+Languages
+Python
+python-jsonrpc is the official JSON-RPC implementation for Python. It automatically generates Python methods for RPC calls. However, due to its design for supporting old versions of Python, it is also rather inefficient. jgarzik has forked it as Python-BitcoinRPC and optimized it for current versions. Generally, this version is recommended.
+
+While BitcoinRPC lacks a few obscure features from jsonrpc, software using only the ServiceProxy class can be written the same to work with either version the user might choose to install:
+
+from jsonrpc import ServiceProxy
+  
+access = ServiceProxy("http://user:password@127.0.0.1:8332")
+access.getinfo()
+access.listreceivedbyaddress(6)
+#access.sendtoaddress("11yEmxiMso2RsFVfBcCa616npBvGgxiBX", 10)
+The latest version of python-bitcoinrpc has a new syntax.
+
+from bitcoinrpc.authproxy import AuthServiceProxy
+Ruby
+require 'net/http'
+require 'uri'
+require 'json'
+
+class BitcoinRPC
+  def initialize(service_url)
+    @uri = URI.parse(service_url)
+  end
+
+  def method_missing(name, *args)
+    post_body = { 'method' => name, 'params' => args, 'id' => 'jsonrpc' }.to_json
+    resp = JSON.parse( http_post_request(post_body) )
+    raise JSONRPCError, resp['error'] if resp['error']
+    resp['result']
+  end
+
+  def http_post_request(post_body)
+    http    = Net::HTTP.new(@uri.host, @uri.port)
+    request = Net::HTTP::Post.new(@uri.request_uri)
+    request.basic_auth @uri.user, @uri.password
+    request.content_type = 'application/json'
+    request.body = post_body
+    http.request(request).body
+  end
+
+  class JSONRPCError < RuntimeError; end
+end
+
+if $0 == __FILE__
+  h = BitcoinRPC.new('http://user:password@127.0.0.1:8332')
+  p h.getbalance
+  p h.getinfo
+  p h.getnewaddress
+  p h.dumpprivkey( h.getnewaddress )
+  # also see: https://en.bitcoin.it/wiki/Original_Bitcoin_client/API_Calls_list
+end
+Erlang
+Get the rebar dependency from https://github.com/edescourtis/ebitcoind . By default the client will use the configuration in $HOME/.bitcoin/bitcoin.conf or you can instead specify a URI like this:
+
+ebitcoind:start_link(<<"http://user:password@localhost:8332/">>).
+Here is a usage example:
+
+1> {ok,Pid} = ebitcoind:start_link().
+{ok,<0.177.0>}
+2> ebitcoind:getbalance(Pid).
+8437.02478294
+3> ebitcoind:getinfo(Pid).
+{ok, #{<<"balance">> => 8437.02478294,
+  <<"blocks">> => 260404,
+  <<"connections">> => 8,
+  <<"difficulty">> => 148819199.80509263,
+  <<"errors">> => <<>>,
+  <<"keypoololdest">> => 1420307921,
+  <<"keypoolsize">> => 102,
+  <<"paytxfee">> => 0.0,
+  <<"protocolversion">> => 70002,
+  <<"proxy">> => <<>>,
+  <<"relayfee">> => 1.0e-5,
+  <<"testnet">> => false,
+  <<"timeoffset">> => -3,
+  <<"version">> => 90300,
+  <<"walletversion">> => 60000}}
+4> ebitcoind:setgenerate(Pid,true).
+{ok, null}
+5> ebitcoind:getblocktemplate(Pid, #{}).                     
+{ok,#{<<"bits">> => <<"181b0dca">>,
+      <<"coinbaseaux">> => #{<<"flags">> => <<"062f503253482f">>},
+      <<"coinbasevalue">> => 2518690558,
+      <<"curtime">> => 1420421249,
+      <<"height">> => 337533,
+      <<"mintime">> => 1420416332,
+      <<"mutable">> => [<<"time">>,<<"transactions">>,<<"prevblock">>],
+      <<"noncerange">> => <<"00000000ffffffff">>,
+      <<"previousblockhash">> => <<"000000000000000017ce0a0d328bf84cc597785844393e899e9a971a81679a5f">>,
+      <<"sigoplimit">> => 20000,
+      <<"sizelimit">> => 1000000,
+      <<"target">> => <<"00000000000000001b0dca00000000000000000000000000000000000000"...>>,
+      <<"transactions">> => [#{<<"data">> => <<"01000000049b47ce225d29bff7c18b7df7d7df4693523a52"...>>,
+         <<"depends">> => [],
+         <<"fee">> => 0,
+         <<"hash">> => <<"6d0d76e1f27b3a6f7325923710dcdb4107c9"...>>,
+         <<"sigops">> => 1},
+      ...
+PHP
+The JSON-RPC PHP library also makes it very easy to connect to Bitcoin. For example:
+
+  require_once 'jsonRPCClient.php';
+  
+  $bitcoin = new jsonRPCClient('http://user:password@127.0.0.1:8332/');
+   
+  echo "<pre>\n";
+  print_r($bitcoin->getinfo()); echo "\n";
+  echo "Received: ".$bitcoin->getreceivedbylabel("Your Address")."\n";
+  echo "</pre>";
+Note: The jsonRPCClient library uses fopen() and will throw an exception saying "Unable to connect" if it receives a 404 or 500 error from bitcoind. This prevents you from being able to see error messages generated by bitcoind (as they are sent with status 404 or 500). The EasyBitcoin-PHP library is similar in function to JSON-RPC PHP but does not have this issue.
+
+Java
+The easiest way to tell Java to use HTTP Basic authentication is to set a default Authenticator:
+
+  final String rpcuser ="...";
+  final String rpcpassword ="...";
+  
+  Authenticator.setDefault(new Authenticator() {
+      protected PasswordAuthentication getPasswordAuthentication() {
+          return new PasswordAuthentication (rpcuser, rpcpassword.toCharArray());
+      }
+  });
+Once that is done, any JSON-RPC library for Java (or ordinary URL POSTs) may be used to communicate with the Bitcoin server.
+
+Instead of writing your own implementation, consider using one of the existing wrappers like BitcoindClient4J, btcd-cli4j or Bitcoin-JSON-RPC-Client instead.
+
+Perl
+The JSON::RPC package from CPAN can be used to communicate with Bitcoin. You must set the client's credentials; for example:
+
+  use JSON::RPC::Client;
+  use Data::Dumper;
+   
+  my $client = new JSON::RPC::Client;
+  
+  $client->ua->credentials(
+     'localhost:8332', 'jsonrpc', 'user' => 'password'  # REPLACE WITH YOUR bitcoin.conf rpcuser/rpcpassword
+      );
+  
+  my $uri = 'http://localhost:8332/';
+  my $obj = {
+      method  => 'getinfo',
+      params  => [],
+   };
+   
+  my $res = $client->call( $uri, $obj );
+   
+  if ($res){
+      if ($res->is_error) { print "Error : ", $res->error_message; }
+      else { print Dumper($res->result); }
+  } else {
+      print $client->status_line;
+  }
+Go
+The btcrpcclient package can be used to communicate with Bitcoin. You must provide credentials to match the client you are communicating with.
+
+package main
+
+import (
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcrpcclient"
+	"github.com/btcsuite/btcutil"
+	"log"
+)
+
+func main() {
+	// create new client instance
+	client, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
+		HTTPPostMode: true,
+		DisableTLS:   true,
+		Host:         "127.0.0.1:8332",
+		User:         "rpcUsername",
+		Pass:         "rpcPassword",
+	}, nil)
+	if err != nil {
+		log.Fatalf("error creating new btc client: %v", err)
+	}
+
+	// list accounts
+	accounts, err := client.ListAccounts()
+	if err != nil {
+		log.Fatalf("error listing accounts: %v", err)
+	}
+	// iterate over accounts (map[string]btcutil.Amount) and write to stdout
+	for label, amount := range accounts {
+		log.Printf("%s: %s", label, amount)
+	}
+
+	// prepare a sendMany transaction
+	receiver1, err := btcutil.DecodeAddress("1someAddressThatIsActuallyReal", &chaincfg.MainNetParams)
+	if err != nil {
+		log.Fatalf("address receiver1 seems to be invalid: %v", err)
+	}
+	receiver2, err := btcutil.DecodeAddress("1anotherAddressThatsPrettyReal", &chaincfg.MainNetParams)
+	if err != nil {
+		log.Fatalf("address receiver2 seems to be invalid: %v", err)
+	}
+	receivers := map[btcutil.Address]btcutil.Amount{
+		receiver1: 42,  // 42 satoshi
+		receiver2: 100, // 100 satoshi
+	}
+
+	// create and send the sendMany tx
+	txSha, err := client.SendMany("some-account-label-from-which-to-send", receivers)
+	if err != nil {
+		log.Fatalf("error sendMany: %v", err)
+	}
+	log.Printf("sendMany completed! tx sha is: %s", txSha.String())
+}
+.NET (C#)
+The communication with the RPC service can be achieved using the standard http request/response objects. A library for serializing and deserializing Json will make your life a lot easier:
+
+Json.NET ( http://james.newtonking.com/json ) is a high performance JSON package for .NET. It is also available via NuGet from the package manager console ( Install-Package Newtonsoft.Json ).
+
+The following example uses Json.NET:
+
+ HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create("http://localhost.:8332");
+ webRequest.Credentials = new NetworkCredential("user", "pwd");
+ /// important, otherwise the service can't desirialse your request properly
+ webRequest.ContentType = "application/json-rpc";
+ webRequest.Method = "POST";
+  
+ JObject joe = new JObject();
+ joe.Add(new JProperty("jsonrpc", "1.0"));
+ joe.Add(new JProperty("id", "1"));
+ joe.Add(new JProperty("method", Method));
+ // params is a collection values which the method requires..
+ if (Params.Keys.Count == 0)
+ {
+  joe.Add(new JProperty("params", new JArray()));
+ }
+ else
+ {
+     JArray props = new JArray();
+     // add the props in the reverse order!
+     for (int i = Params.Keys.Count - 1; i >= 0; i--)
+     {
+        .... // add the params
+     }
+     joe.Add(new JProperty("params", props));
+     }
+  
+     // serialize json for the request
+     string s = JsonConvert.SerializeObject(joe);
+     byte[] byteArray = Encoding.UTF8.GetBytes(s);
+     webRequest.ContentLength = byteArray.Length;
+     Stream dataStream = webRequest.GetRequestStream();
+     dataStream.Write(byteArray, 0, byteArray.Length);
+     dataStream.Close();
+     
+     
+     WebResponse webResponse = webRequest.GetResponse();
+     
+     ... // deserialze the response
+There is also a wrapper for Json.NET called Bitnet (https://sourceforge.net/projects/bitnet) implementing Bitcoin API in more convenient way:
+
+     BitnetClient bc = new BitnetClient("http://127.0.0.1:8332");
+     bc.Credentials = new NetworkCredential("user", "pass");
+
+     var p = bc.GetDifficulty();
+     Console.WriteLine("Difficulty:" + p.ToString());
+
+     var inf = bc.GetInfo();
+     Console.WriteLine("Balance:" + inf["balance"]);
+A more complete library and wrapper for Bitcoin is BitcoinLib (https://github.com/GeorgeKimionis/BitcoinLib) which is also available via NuGet from the package manager console (Install-Package BitcoinLib).
+
+Querying the daemon with BitcoinLib is as simple as:
+
+     IBitcoinService bitcoinService = new BitcoinService();
+
+     var networkDifficulty = bitcoinService.GetDifficulty();
+     var myBalance = bitcoinService.GetBalance();
+Node.js
+bitcoin-core (npm: bitcoin-core)
+Example using bitcoin-core:
+
+const Client = require('bitcoin-core');
+const client = new Client({ 
+  network: 'regtest', 
+  username: 'user', 
+  password: 'pass', 
+  port: 18443 
+});
+
+client.getBlockchainInfo().then((help) => console.log(help));
+Command line (cURL)
+You can also send commands and see results using cURL or some other command-line HTTP-fetching utility; for example:
+
+  curl --user user --data-binary '{"jsonrpc": "1.0", "id":"curltest", "method": "getinfo", "params": [] }' 
+    -H 'content-type: text/plain;' http://127.0.0.1:8332/
+You will be prompted for your rpcpassword, and then will see something like:
+
+  {"result":{"balance":0.000000000000000,"blocks":59952,"connections":48,"proxy":"","generate":false,
+     "genproclimit":-1,"difficulty":16.61907875185736},"error":null,"id":"curltest"}
+Command line (jsonrpc-cli)
+jsonrpc-cli provides simple json queries from the command-line with highlighted json results (colors) and the ability to view/debug raw http requests and responses.
+
+ jsonrpc-cli --user=rpcuser --pass=rpcpassword  http://localhost:8332/ getinfo
+{
+    "version": 109900,
+    "protocolversion": 70002,
+    "walletversion": 60000,
+    "balance": 0,
+    "blocks": 588597,
+    "timeoffset": -1,
+    "connections": 9,
+    "proxy": "127.0.0.1:9050",
+    "difficulty": 9013786945891.682,
+    "testnet": false,
+    "keypoololdest": 1463279619,
+    "keypoolsize": 101,
+    "paytxfee": 0,
+    "relayfee": 1.0e-5,
+    "errors": null
+}
+Clojure
+clj-btc is a Clojure wrapper for the bitcoin API.
+
+user=> (require '[clj-btc.core :as btc])
+nil
+user=> (btc/getinfo)
+{"timeoffset" 0, "protocolversion" 70001, "blocks" 111908, "errors" "",
+ "testnet" true, "proxy" "", "connections" 4, "version" 80500,
+ "keypoololdest" 1380388750, "paytxfee" 0E-8M,
+ "difficulty" 4642.44443532M, "keypoolsize" 101, "balance" 0E-8M,
+ "walletversion" 60000}
+C
+The C API for processing JSON is Jansson. C applications like libblkmaker use cURL for making the calls and Jansson for interpreting the JSON that cURL fetches.
+
+For example basic usage (which can be easily modified for Bitcoin RPC), see the Jansson example github_commits.c and the associated tutorial.
+
+The following does with libcurl what the cURL example above does:
+#include <stdlib.h>
+
+#include <curl/curl.h>
+
+int main()
+{
+    CURL *curl = curl_easy_init();
+    struct curl_slist *headers = NULL;
+
+    if (curl) {
+	const char *data =
+	    "{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"getinfo\", \"params\": [] }";
+
+	headers = curl_slist_append(headers, "content-type: text/plain;");
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+	curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:8332/");
+
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long) strlen(data));
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+
+	curl_easy_setopt(curl, CURLOPT_USERPWD,
+			 "bitcoinrpcUSERNAME:bitcoinrpcPASSWORD");
+
+	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+
+	curl_easy_perform(curl);
+    }
+    return 0;
+}
+This output can be parsed with Jansson, à la the Jansson tutorial linked to above.
+(source: Bitcoin StackExchange)
+
+Qt/C++
+QJsonRpc is a Qt/C++ implementation of the JSON-RPC protocol. It integrates nicely with Qt, leveraging Qt's meta object system in order to provide services over the JSON-RPC protocol. QJsonRpc is licensed under the LGPLv2.1.
+
+/*
+ * Copyright (C) 2012-2013 Matt Broadstone
+ * Contact: http://bitbucket.org/devonit/qjsonrpc
+ *
+ * This file is part of the QJsonRpc Library.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ */
+#include <QCoreApplication>
+#include <QAuthenticator>
+#include <QStringList>
+#include <QDebug>
+
+#include "qjsonrpchttpclient.h"
+
+class HttpClient : public QJsonRpcHttpClient
+{
+    Q_OBJECT
+public:
+    HttpClient(const QString &endpoint, QObject *parent = 0)
+        : QJsonRpcHttpClient(endpoint, parent)
+    {
+        // defaults added for my local test server
+        m_username = "bitcoinrpc";
+        m_password = "232fb3276bbb7437d265298ea48bdc46";
+    }
+
+    void setUsername(const QString &username) {
+        m_username = username;
+    }
+
+    void setPassword(const QString &password) {
+        m_password = password;
+    }
+
+private Q_SLOTS:
+    virtual void handleAuthenticationRequired(QNetworkReply *reply, QAuthenticator * authenticator)
+    {
+        Q_UNUSED(reply)
+        authenticator->setUser(m_username);
+        authenticator->setPassword(m_password);
+    }
+
+private:
+    QString m_username;
+    QString m_password;
+
+};
+
+int main(int argc, char **argv)
+{
+    QCoreApplication app(argc, argv);
+    if (app.arguments().size() < 2) {
+        qDebug() << "usage: " << argv[0] << "[-u username] [-p password] <command> <arguments>";
+        return -1;
+    }
+
+    HttpClient client("http://127.0.0.1:8332");
+    if (app.arguments().contains("-u")) {
+        int idx = app.arguments().indexOf("-u");
+        app.arguments().removeAt(idx);
+        if(idx<app.arguments().count())
+              client.setUsername(app.arguments().takeAt(idx));
+        else qDebug()<<"-u value not defined";
+    }
+
+    if (app.arguments().contains("-p")) {
+        int idx = app.arguments().indexOf("-p");
+        app.arguments().removeAt(idx);
+        if(idx<app.arguments().count())
+            client.setPassword(app.arguments().takeAt(idx));
+        else qDebug()<<"-p value not defined";
+    }
+
+    QJsonRpcMessage message = QJsonRpcMessage::createRequest(app.arguments().at(1));
+    QJsonRpcMessage response = client.sendMessageBlocking(message);
+    if (response.type() == QJsonRpcMessage::Error) {
+        qDebug() << response.errorData();
+        return -1;
+    }
+
+    qDebug() << response.toJson();
+}
+Multi-wallet RPC calls
+Bitcoin Knots 0.13.1 added support for loading multiple, separate wallets. Multi-wallet can be enabled by using more than one -wallet argument when starting Bitcoin, either on the command line or in the Bitcoin config file. This was also included in Bitcoin Core 0.15.
+
+Wallet-level RPC calls (like importaddress or listtransactions) can specify which wallet file will be accessed. This is done by setting the HTTP endpoint in the JSON-RPC request in the format <RPC IP address>:<RPC port>/wallet/<wallet name>, for example https://127.0.0.1:8332/wallet/wallet1.dat.
+
+The command line utility bitcoin-cli can specify the wallet file using the -rpcwallet flag, for example bitcoin-cli -rpcwallet=wallet1.dat getbalance
+
+For more details see the Bitcoin Core 0.15 release notes
+
+Alternatively (but not available in Bitcoin Core at this time), an additional parameter can be specified to -rpcauth naming a default wallet for JSON-RPC accesses to the normal endpoint.
+
+See Also
+The Bitcoin Core documentation: https://github.com/bitcoin/bitcoin/blob/master/doc/JSON-RPC-interface.md#json-rpc-interface
+The Bitcoin Core RPC help for each call: https://bitcoincore.org/en/doc/
+The Bitcoin Core RPC error codes: https://github.com/bitcoin/bitcoin/blob/master/src/rpc/protocol.h
+Bitcoin Core RPC API version changes https://masonicboom.github.io/btcrpcapi/
+API calls list
+Running Bitcoin
+Lazy API
+PHP developer intro
+Raw Transactions API
+GoUrl Bitcoin PHP Payment API
+Web Based JSON RPC interface.
+
+Bitcoin Core documentation
+User documentation	
+Alert system • Bitcoin Core compatible devices • Data directory • Fallback Nodes • How to import private keys in Bitcoin Core 0.7+ • Installing Bitcoin Core • Running Bitcoin • Transaction fees • Vocabulary
+Developer documentation	
+Accounts explained • API calls list • API reference (JSON-RPC) • Block chain download • Dump format • getblocktemplate • List of address prefixes • Protocol documentation • Script • Technical background of version 1 Bitcoin addresses • Testnet • Transaction Malleability • Wallet import format
+History & theory	
+Common Vulnerabilities and Exposures • DOS/STONED incident • Economic majority • Full node • Original Bitcoin client • Value overflow incident
